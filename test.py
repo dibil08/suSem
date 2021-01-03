@@ -8,18 +8,20 @@ from statistics import median, mean
 from collections import Counter
 from gaNN import *
 import os.path
-LR = 1e-3
+
+lr = 1e-3
 gym.envs.register(
     id='CartPoleExtraLong-v0',
     entry_point='gym.envs.classic_control:CartPoleEnv',
-    max_episode_steps=500,
+    max_episode_steps=5000,
 )
 
 env = gym.make("CartPoleExtraLong-v0")
 env.reset()
-goal_steps = 500
+goal_steps = 10000
 score_requirement = 50
 initial_games = 50000
+scoringGamesNumber=30
 
 def initial_population():
     if os.path.isfile('saved.npy'):
@@ -108,7 +110,7 @@ def neural_network_model(input_size):
     network = fully_connected(network, 128, activation='relu')
     network = dropout(network, 0.8)
     network = fully_connected(network, 2, activation='softmax')
-    network = regression(network, optimizer='adam', learning_rate=LR, loss='categorical_crossentropy', name='targets')
+    network = regression(network, optimizer='adam', learning_rate=lr, loss='categorical_crossentropy', name='targets')
     model = tflearn.DNN(network, tensorboard_dir='log')
 
     return model
@@ -121,7 +123,7 @@ def train_model(training_data, model=False):
     if not model:
         model = neural_network_model(input_size = len(X[0]))
     
-    model.fit({'input': X}, {'targets': y}, n_epoch=2, snapshot_step=500, show_metric=True, run_id='openai_learning')
+    model.fit({'input': X}, {'targets': y}, n_epoch=100, snapshot_step=500, show_metric=True, run_id="ANN")
     return model
 
 print("Geting training data")
@@ -133,7 +135,7 @@ print("done training")
 model_to_vector(model)
 scores = []
 choices = []
-for each_game in range(2):
+for each_game in range(30):
     score = 0
     game_memory = []
     prev_obs = []
@@ -157,46 +159,6 @@ for each_game in range(2):
     scores.append(score)
 
 print('Average Score:',sum(scores)/len(scores))
+print('STD :',stdev(score))
 print('choice 1:{}  choice 0:{}'.format(choices.count(1)/len(choices),choices.count(0)/len(choices)))
 print(score_requirement)
-
-# model = neural_network_model(10)
-for i in range(3):
-    agent = model_to_vector(model)
-    child = crossover(np.array([agent[0],agent[0]],np.float32),np.array([5,len(agent[0])]))
-    childBias = crossover(np.array([agent[1],agent[1]],np.float32),np.array([5,len(agent[1])]))
-    mutChildWeight =mutation(np.array([child[0]]),0.5)
-    mutChildBias =mutation(np.array([childBias[0]]),0.001)
-    print(mutChildBias)
-    print(mutChildWeight)
-    model = vector_to_model(mutChildWeight[0],mutChildBias[0],model,lr)
-    
-    scores = []
-    choices = []
-    for each_game in range(5):
-        score = 0
-        game_memory = []
-        prev_obs = []
-        env.reset()
-        while True:
-            env.render()
-
-            if len(prev_obs)==0:
-                action = random.randrange(0,2)
-            else:
-                action = np.argmax(model.predict(prev_obs.reshape(-1,len(prev_obs),1))[0])
-
-            choices.append(action)
-                    
-            new_observation, reward, done, info = env.step(action)
-            prev_obs = new_observation
-            game_memory.append([new_observation, action])
-            score+=reward
-            if done: break
-
-        scores.append(score)
-
-    print('Average Score:',sum(scores)/len(scores))
-    print('choice 1:{}  choice 0:{}'.format(choices.count(1)/len(choices),choices.count(0)/len(choices)))
-    print(score_requirement)
-
